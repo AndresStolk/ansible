@@ -1,0 +1,101 @@
+# nagios.yml
+---
+- name: Install and configure Nagios Core on RHEL 9
+  hosts: monitoring
+  become: yes
+  tasks:
+    - name: Ensure all packages are up to date
+      dnf:
+        name: '*'
+        state: latest
+
+    - name: Install required dependencies
+      dnf:
+        name:
+          - gcc
+          - glibc
+          - glibc-common
+          - httpd
+          - php
+          - php-cli
+          - gd
+          - gd-devel
+          - net-snmp
+          - unzip
+          - wget
+          - perl
+          - postfix
+        state: present
+
+    - name: Create Nagios command group
+      group:
+        name: nagcmd
+        state: present
+
+    - name: Create Nagios user and add to nagcmd group
+      user:
+        name: nagios
+        group: nagcmd
+        state: present
+
+    - name: Download Nagios Core
+      get_url:
+        url: "https://assets.nagios.com/downloads/nagioscore/releases/nagios-4.4.10.tar.gz"
+        dest: "/tmp/nagios-4.4.10.tar.gz"
+
+    - name: Extract Nagios Core
+      unarchive:
+        src: "/tmp/nagios-4.4.10.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+
+    - name: Compile Nagios Core
+      shell: |
+        ./configure --with-command-group=nagcmd
+        make all
+      args:
+        chdir: /tmp/nagios-4.4.10
+
+    - name: Install Nagios Core
+      shell: |
+        make install
+        make install-commandmode
+        make install-init
+        make install-config
+        make install-webconf
+      args:
+        chdir: /tmp/nagios-4.4.10
+
+    - name: Download Nagios Plugins
+      get_url:
+        url: "http://nagios-plugins.org/download/nagios-plugins-2.4.3.tar.gz"
+        dest: "/tmp/nagios-plugins-2.4.3.tar.gz"
+
+    - name: Extract Nagios Plugins
+      unarchive:
+        src: "/tmp/nagios-plugins-2.4.3.tar.gz"
+        dest: "/tmp"
+        remote_src: yes
+
+    - name: Compile and install Nagios Plugins
+      shell: |
+        ./configure --with-nagios-user=nagios --with-nagios-group=nagcmd
+        make
+        make install
+      args:
+        chdir: /tmp/nagios-plugins-2.4.3
+
+    - name: Configure Nagios web interface
+      command: htpasswd -b -c /usr/local/nagios/etc/htpasswd.users nagiosadmin 'Gerard123!'
+
+    - name: Restart Apache to apply web interface changes
+      service:
+        name: httpd
+        state: restarted
+
+    - name: Start and enable Nagios service
+      service:
+        name: nagios
+        state: started
+        enabled: yes
+

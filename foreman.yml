@@ -1,0 +1,18 @@
+# foreman.yml
+---
+- name: Install and configure Foreman
+  hosts: patchmanagement
+  become: yes
+  tasks:
+    - name: Install Foreman
+      dnf:
+        name: foreman-installer
+        state: present
+    - name: Run Foreman installer
+      command: foreman-installer
+    - name: Start and enable Foreman service
+      service:
+        name: foreman
+        state: started
+        enabled: yes
+

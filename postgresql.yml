@@ -1,0 +1,24 @@
+# postgresql.yml
+---
+- name: Install and configure PostgreSQL
+  hosts: postgresql
+  become: yes
+  tasks:
+    - name: Install PostgreSQL
+      dnf:
+        name: postgresql
+        state: present
+
+    - name: Initialize PostgreSQL database
+      command: /usr/pgsql-15/bin/postgresql-15-setup initdb
+
+    - name: Start and enable PostgreSQL service
+      service:
+        name: postgresql-15
+        state: started
+        enabled: yes
+
+    - name: Set PostgreSQL password
+      become_user: postgres
+      command: psql -c "ALTER USER postgres WITH PASSWORD 'your_secure_password';"
+

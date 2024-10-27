@@ -1,0 +1,29 @@
+# nginx.yml
+---
+- name: Install and configure Nginx
+  hosts: webserver
+  become: yes
+  tasks:
+    - name: Install Nginx
+      dnf:
+        name: nginx
+        state: present
+
+    - name: Copy Nginx config
+      copy:
+        src: /home/andres/ansible_project/nginx.conf
+        dest: /etc/nginx/nginx.conf
+        notify:
+          - Restart Nginx
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+    - name: Ensure Nginx is enabled and started
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
