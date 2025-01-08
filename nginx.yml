@@ -1,6 +1,6 @@
 # nginx.yml
 ---
-- name: Install and configure Nginx
+- name: Install and configure Nginx and NRPE
   hosts: webserver
   become: yes
   tasks:
@@ -11,16 +11,126 @@
 
     - name: Copy Nginx config
       copy:
-        src: /home/andres/ansible_project/nginx.conf
+        src: /home/andres/ansible/nginx.conf
         dest: /etc/nginx/nginx.conf
         notify:
           - Restart Nginx
+
+    - name: Install Nagios plugins 
+      dnf: 
+        name: 
+          - gcc 
+          - glibc 
+          - glibc-common 
+          - openssl 
+          - openssl-devel 
+          - perl 
+          - wget 
+        state: present
+
+    - name: Download NRPE package 
+      get_url: 
+        url: https://github.com/NagiosEnterprises/nrpe/archive/nrpe-4.1.0.tar.gz 
+        dest: /tmp/nrpe.tar.gz 
+        validate_certs: no 
+
+    - name: Extract NRPE package 
+      unarchive: 
+        src: /tmp/nrpe.tar.gz 
+        dest: /tmp/ 
+        remote_src: yes
+
+    - name: Configure NRPE with command arguments enabled 
+      command: ./configure --enable-command-args 
+      args: 
+        chdir: /tmp/nrpe-nrpe-4.1.0/ 
+
+    - name: Compile NRPE 
+      make: 
+        chdir: /tmp/nrpe-nrpe-4.1.0/ 
+        target: all
+
+    - name: Install NRPE groups and users 
+      make: 
+        chdir: /tmp/nrpe-nrpe-4.1.0/ 
+        target: install-groups-users
+
+    - name: Install NRPE 
+      make: 
+        chdir: /tmp/nrpe-nrpe-4.1.0/ 
+        target: install 
+
+    - name: Install NRPE configuration 
+      make: 
+        chdir: /tmp/nrpe-nrpe-4.1.0/ 
+        target: install-config 
+
+    - name: Append Nagios services to /etc/services 
+      blockinfile: 
+        path: /etc/services 
+        block: | 
+          # Nagios services 
+          nrpe 5666/tcp 
+
+    - name: Install NRPE init script 
+      make: 
+        chdir: /tmp/nrpe-nrpe-4.1.0/ 
+        target: install-init 
+
+    - name: Enable NRPE service 
+      systemd: 
+        name: nrpe 
+        enabled: yes 
+        state: started 
+
+    - name: Add NRPE port to firewall 
+      firewalld: 
+        port: 5666/tcp 
+        zone: public 
+        state: enabled 
+        permanent: no 
+
+    - name: Add NRPE port to firewall permanently 
+      firewalld: 
+        port: 5666/tcp 
+        zone: public 
+        state: enabled 
+        permanent: yes 
+
+    - name: Update allowed_hosts in nrpe.cfg 
+      lineinfile: 
+        path: /usr/local/nagios/etc/nrpe.cfg 
+        regexp: '^allowed_hosts=' 
+        line: 'allowed_hosts=127.0.0.1,::1,192.168.227.144' 
+
+    - name: Set dont_blame_nrpe to 1 in nrpe.cfg 
+      lineinfile: 
+        path: /usr/local/nagios/etc/nrpe.cfg 
+        regexp: '^dont_blame_nrpe=' 
+        line: 'dont_blame_nrpe=1' 
+
+    - name: Start NRPE service 
+      systemd: 
+        name: nrpe 
+        state: started
+
+    - name: Ensure NRPE service is enabled and started 
+      service: 
+        name: nrpe 
+        state: started 
+        enabled: yes
 
   handlers:
     - name: Restart Nginx
       service:
         name: nginx
         state: restarted
+
+    - name: Restart NRPE 
+      service:
+        name: nrpe 
+        state: restarted
+
     - name: Ensure Nginx is enabled and started
       service:
         name: nginx
